@@ -152,7 +152,8 @@ int main(int argc, char* argv[])
 
 		if(string(argv[1]) == string("Input")) // input option
 		{
-			A.ReadDistribute(string(argv[2]), 0);	// read it from file
+			// A.ReadDistribute(string(argv[2]), 0);	// read it from file
+			A.ReadGeneralizedTuples(string(argv[2]), maximum<bool>());
 			SpParHelper::Print("Read input\n");
 
 			PSpMat_Int64 * G = new PSpMat_Int64(A); 
