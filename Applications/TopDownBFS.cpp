@@ -45,7 +45,7 @@ double cblas_mergeconttime;
 double cblas_transvectime;
 double cblas_localspmvtime;
 
-#define ITERS 16
+#define ITERS 1
 #define EDGEFACTOR 16
 using namespace std;
 using namespace combblas;
@@ -398,6 +398,7 @@ int main(int argc, char* argv[])
 		{
 			for(int i=0; i<ITERS; ++i)
 				loccands[i] = M.rand();
+			loccands[0] = 0;
 			copy(loccands.begin(), loccands.end(), ostream_iterator<double>(cout," ")); cout << endl;
 			transform(loccands.begin(), loccands.end(), loccands.begin(), bind2nd( multiplies<double>(), nver ));
 			
