@@ -164,6 +164,13 @@ int main(int argc, char* argv[])
 			FullyDistVec<int64_t, int64_t> * ColSums = new FullyDistVec<int64_t, int64_t>(A.getcommgrid());
 			A.Reduce(*ColSums, Column, plus<int64_t>(), static_cast<int64_t>(0)); 	// plus<int64_t> matches the type of the output vector
 			nonisov = ColSums->FindInds(bind2nd(greater<int64_t>(), 0));	// only the indices of non-isolated vertices
+			bool zero_vertex_present = nonisov.Count([](int64_t x) { return x == 0;}) > 0 ? true : false;
+			if (zero_vertex_present) {
+				std::cout << "Vertex 0 present!\n";
+			} else {
+				std::cout << "Vertex 0 not present!\n";
+				throw std::domain_error("Vertex 0 is isolated!");
+			}
 			delete ColSums;
 			A = A(nonisov, nonisov);
 			Aeff = PSpMat_s32p64(A);
