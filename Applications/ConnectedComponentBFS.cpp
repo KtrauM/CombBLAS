@@ -153,7 +153,12 @@ int main(int argc, char* argv[])
 		if(string(argv[1]) == string("Input")) // input option
 		{
 			// A.ReadDistribute(string(argv[2]), 0);	// read it from file
-			A.ReadGeneralizedTuples(string(argv[2]), maximum<bool>());
+			auto mapping = A.ReadGeneralizedTuples(string(argv[2]), maximum<bool>());
+			// int mapping_len = mapping.TotalLength();
+			// for (int i = 0; i < mapping_len; i++) {
+			// 	std::cout << mapping.GetElement(i).data();
+			// 	std::cout << "\n";
+			// }
 			SpParHelper::Print("Read input\n");
 
 			PSpMat_Int64 * G = new PSpMat_Int64(A); 
@@ -172,7 +177,9 @@ int main(int argc, char* argv[])
 				throw std::domain_error("Vertex 0 is isolated!");
 			}
 			delete ColSums;
+			// A.PrintInfo();
 			A = A(nonisov, nonisov);
+			// A.PrintInfo();
 			Aeff = PSpMat_s32p64(A);
 			A.FreeMemory();
 			SpParHelper::Print("Symmetricized and pruned\n");
@@ -425,25 +432,30 @@ int main(int argc, char* argv[])
 		FullyDistVec<int64_t, int64_t> parents ( Aeff.getcommgrid(), Aeff.getncol(), (int64_t) -1);	// identity is -1
 		uint64_t num_components = 0;
 		double cc_start = MPI_Wtime();
-        for(int vertex = 0; vertex < nver; vertex++) 
+        for(int vertex = 0; vertex < nver;) 
         {
 			MPI_Barrier(MPI_COMM_WORLD);
 			++num_components;
 
 			FullyDistSpVec<int64_t, int64_t> fringe(Aeff.getcommgrid(), Aeff.getncol());	// numerical values are stored 0-based
 			fringe.SetElement(static_cast<int64_t>(vertex), static_cast<int64_t>(vertex));
-
+			// std::cout << "Frontier before running BFS\n";
+			// fringe.DebugPrint(); 
 			while(fringe.getnnz() > 0)
 			{
 				fringe.setNumToInd();
 				fringe = SpMV(Aeff, fringe,optbuf);	// SpMV with sparse vector (with indexisvalue flag preset), optimization enabled
 				fringe = EWiseMult(fringe, parents, true, (int64_t) -1);	// clean-up vertices that already has parents 
+				// std::cout << "Frontier during BFS\n";
+				// fringe.DebugPrint();
 				parents.Set(fringe);
 			}
 			MPI_Barrier(MPI_COMM_WORLD);
-
+			// std::cout << "Frontier after BFS\n";
+			// fringe.DebugPrint();
 			// FullyDistSpVec<int64_t, int64_t> parentsp = parents.Find(bind2nd(greater<int64_t>(), -1));
 			const auto [next_vertex, parent] = parents.MinElement();
+			// std::cout << "Next vertex and parent: " << next_vertex << " " << parent << "\n";
 			if (parent != -1) {
 				break;
 			}
