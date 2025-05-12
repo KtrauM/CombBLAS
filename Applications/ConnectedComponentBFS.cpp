@@ -158,16 +158,9 @@ int main(int argc, char* argv[])
 			// A.ReadDistribute(string(argv[2]), 0);	// read it from file
 			auto mapping = A.ReadGeneralizedTuples(string(argv[2]), maximum<bool>());
 			SpParHelper::Print("Read input\n");
-
-
-			A.PrintInfo();
-			
 			PSpMat_Int64 * G = new PSpMat_Int64(A); 
 			G->Reduce(degrees, Row, plus<int64_t>(), static_cast<int64_t>(0));	// identity is 0 
 			delete G;
-
-			std::cout << "degrees in input\n";
-			degrees.DebugPrint();
 
 			Symmetricize(A);	// A += A';
 			FullyDistVec<int64_t, int64_t> * ColSums = new FullyDistVec<int64_t, int64_t>(A.getcommgrid());
@@ -188,7 +181,7 @@ int main(int argc, char* argv[])
 			A.FreeMemory();
 			SpParHelper::Print("Symmetricized and pruned\n");
 			std::cout << "Aeff\n";
-			Aeff.PrintInfo();
+			// Aeff.PrintInfo();
                         Aeff.OptimizeForGraph500(optbuf);               // Should be called before threading is activated
                 #ifdef THREADED
                         ostringstream tinfo;
@@ -231,10 +224,6 @@ int main(int argc, char* argv[])
 			auto local_edges = graph.TakeEdges<int64_t>();
 			
 			DistEdgeList<int64_t> *DEL = new DistEdgeList<int64_t>(fullWorld->GetWorld(), globaln, local_edges);
-			auto del_edges = DEL->getEdges();
-			for (int i = 0; i < DEL->getNumLocalEdges(); i++) {
-				std::cout << "Edge " << i << ": " << del_edges[2 * i] << " " << del_edges[2 * i + 1] << std::endl;
-			}
 			A = PSpMat_Bool(*DEL, false);
 			delete DEL;
 			
@@ -246,19 +235,8 @@ int main(int argc, char* argv[])
 			A.Reduce(*ColSums, Column, plus<int64_t>(), static_cast<int64_t>(0)); 	// plus<int64_t> matches the type of the output vector
 			nonisov = ColSums->FindInds(bind2nd(greater<int64_t>(), 0));
 
-			std::cout << "degrees in kagen\n";
-			degrees.DebugPrint();
-			ostringstream graphinfo;
-			graphinfo << "Converted to Boolean matrix" << endl;
-			SpParHelper::Print(graphinfo.str());
-			A.PrintInfo();
-
 			Aeff = PSpMat_s32p64(A);
 			A.FreeMemory();
-			std::cout << "Aeff\n";
-			Aeff.PrintInfo();
-			SpParHelper::Print("Symmetricized\n");
-
 			Aeff.OptimizeForGraph500(optbuf);		// Should be called before threading is activated
 #ifdef THREADED
 			ostringstream tinfo;
@@ -300,7 +278,6 @@ int main(int argc, char* argv[])
 			ostringstream loopinfo;
 			loopinfo << "Converted to Boolean and removed " << removed << " loops" << endl;
 			SpParHelper::Print(loopinfo.str());
-			A.PrintInfo();
 
 			FullyDistVec<int64_t, int64_t> * ColSums = new FullyDistVec<int64_t, int64_t>(A.getcommgrid());
 			FullyDistVec<int64_t, int64_t> * RowSums = new FullyDistVec<int64_t, int64_t>(A.getcommgrid());
@@ -314,11 +291,11 @@ int main(int argc, char* argv[])
 
 			SpParHelper::Print("Found (and permuted) non-isolated vertices\n");	
 			nonisov.RandPerm();	// so that A(v,v) is load-balanced (both memory and time wise)
-			A.PrintInfo();
+			// A.PrintInfo();
 		#ifndef NOPERMUTE
 			A(nonisov, nonisov, true);	// in-place permute to save memory
 			SpParHelper::Print("Dropped isolated vertices from input\n");	
-			A.PrintInfo();
+			// A.PrintInfo();
 		#endif
 			Aeff = PSpMat_s32p64(A);	// Convert to 32-bit local integers
 			A.FreeMemory();
@@ -414,7 +391,7 @@ int main(int argc, char* argv[])
 			ostringstream loopinfo;
 			loopinfo << "Converted to Boolean and removed " << removed << " loops" << endl;
 			SpParHelper::Print(loopinfo.str());
-			A.PrintInfo();
+			// A.PrintInfo();
 
 			FullyDistVec<int64_t, int64_t> * ColSums = new FullyDistVec<int64_t, int64_t>(A.getcommgrid());
 			FullyDistVec<int64_t, int64_t> * RowSums = new FullyDistVec<int64_t, int64_t>(A.getcommgrid());
@@ -430,11 +407,11 @@ int main(int argc, char* argv[])
 
 			SpParHelper::Print("Found (and permuted) non-isolated vertices\n");	
 			nonisov.RandPerm();	// so that A(v,v) is load-balanced (both memory and time wise)
-			A.PrintInfo();
+			// A.PrintInfo();
 		#ifndef NOPERMUTE
 			A(nonisov, nonisov, true);	// in-place permute to save memory	
 			SpParHelper::Print("Dropped isolated vertices from input\n");	
-			A.PrintInfo();
+			// A.PrintInfo();
 		#endif
 		
 			Aeff = PSpMat_s32p64(A);	// Convert to 32-bit local integers
@@ -449,7 +426,7 @@ int main(int argc, char* argv[])
 			SpParHelper::Print(tinfo.str());
 			Aeff.ActivateThreading(cblas_splits);	
 		#endif
-			Aeff.PrintInfo();
+			// Aeff.PrintInfo();
 			
 			MPI_Barrier(MPI_COMM_WORLD);
 			double t2=MPI_Wtime();
@@ -458,7 +435,6 @@ int main(int argc, char* argv[])
 			k1timeinfo << (t2-t1) - (redtf-redts) << " seconds elapsed for Kernel #1" << endl;
 			SpParHelper::Print(k1timeinfo.str());
 		}
-		Aeff.PrintInfo();
 		float balance = Aeff.LoadImbalance();
 		ostringstream outs;
 		outs << "Load balance: " << balance << endl;
@@ -468,7 +444,6 @@ int main(int argc, char* argv[])
 		double t1 = MPI_Wtime();
 
 		// Now that every remaining vertex is non-isolated, randomly pick ITERS many of them as starting vertices
-		degrees.DebugPrint();
 		FullyDistVec<int64_t, int64_t> Cands(ITERS, 0);
 		double nver = (double) degrees.TotalLength();
 
@@ -503,9 +478,6 @@ int main(int argc, char* argv[])
 		FullyDistVec<int64_t, int64_t> parents ( Aeff.getcommgrid(), Aeff.getncol(), (int64_t) -1);	// identity is -1
 		uint64_t num_components = 0;
 		double cc_start = MPI_Wtime();
-		std::cout << "nver: " << nver << "\n";
-		std::cout << "nonisov: ";
-		nonisov.DebugPrint();
         for(int vertex = 0; vertex < nver;) 
         {
 			cblas_allgathertime = 0;
@@ -523,25 +495,13 @@ int main(int argc, char* argv[])
 			// fringe.DebugPrint(); 
 			while(fringe.getnnz() > 0)
 			{
-				std::cout << "fringe before running BFS\n";
-				fringe.DebugPrint();
 				fringe.setNumToInd();
 				fringe = SpMV(Aeff, fringe,optbuf);	// SpMV with sparse vector (with indexisvalue flag preset), optimization enabled
 				fringe = EWiseMult(fringe, parents, true, (int64_t) -1);	// clean-up vertices that already has parents 
-				std::cout << "fringe after running BFS\n";
-				fringe.DebugPrint();
-				std::cout << "parents before running BFS\n";
-				parents.DebugPrint();
 				parents.Set(fringe);
-				std::cout << "parents after running BFS\n";
-				parents.DebugPrint();
 			}
 			MPI_Barrier(MPI_COMM_WORLD);
 			double bfs_iteration_end = MPI_Wtime();
-			// std::cout << "Frontier after BFS\n";
-			// fringe.DebugPrint();
-			// FullyDistSpVec<int64_t, int64_t> parentsp = parents.Find(bind2nd(greater<int64_t>(), -1));
-			parents.DebugPrint();
 			auto [next_vertex, parent] = parents.MinElement();
 			while (next_vertex == vertex) {
 				parents.SetElement(vertex, vertex);
@@ -554,12 +514,11 @@ int main(int argc, char* argv[])
 				break;
 			}
 			vertex = next_vertex;
-			std::cout << "next_vertex: " << next_vertex << "\n";
 
 			ostringstream outnew;
-			outnew << "BFS iteration time: " << bfs_iteration_end - bfs_iteration_start << " seconds" << endl;
-			outnew << "Communication per iteration: " << (cblas_allgathertime + cblas_alltoalltime) << endl;
-			SpParHelper::Print(outnew.str());
+			// outnew << "BFS iteration time: " << bfs_iteration_end - bfs_iteration_start << " seconds" << endl;
+			// // outnew << "Communication per iteration: " << (cblas_allgathertime + cblas_alltoalltime) << endl;
+			// SpParHelper::Print(outnew.str());
         }
 		double cc_end = MPI_Wtime();
         SpParHelper::Print("Finished\n");
