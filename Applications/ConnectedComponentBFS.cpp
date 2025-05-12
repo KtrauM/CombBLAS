@@ -26,6 +26,7 @@
  THE SOFTWARE.
  */
 
+#include <cstdint>
 #define DETERMINISTIC
 #include "CombBLAS/CombBLAS.h"
 #include <mpi.h>
@@ -36,6 +37,8 @@
 #include <vector>
 #include <string>
 #include <sstream>
+
+#include <kagen.h>
 
 int cblas_splits;
 
@@ -154,16 +157,17 @@ int main(int argc, char* argv[])
 		{
 			// A.ReadDistribute(string(argv[2]), 0);	// read it from file
 			auto mapping = A.ReadGeneralizedTuples(string(argv[2]), maximum<bool>());
-			// int mapping_len = mapping.TotalLength();
-			// for (int i = 0; i < mapping_len; i++) {
-			// 	std::cout << mapping.GetElement(i).data();
-			// 	std::cout << "\n";
-			// }
 			SpParHelper::Print("Read input\n");
 
+
+			A.PrintInfo();
+			
 			PSpMat_Int64 * G = new PSpMat_Int64(A); 
 			G->Reduce(degrees, Row, plus<int64_t>(), static_cast<int64_t>(0));	// identity is 0 
 			delete G;
+
+			std::cout << "degrees in input\n";
+			degrees.DebugPrint();
 
 			Symmetricize(A);	// A += A';
 			FullyDistVec<int64_t, int64_t> * ColSums = new FullyDistVec<int64_t, int64_t>(A.getcommgrid());
@@ -183,7 +187,8 @@ int main(int argc, char* argv[])
 			Aeff = PSpMat_s32p64(A);
 			A.FreeMemory();
 			SpParHelper::Print("Symmetricized and pruned\n");
-
+			std::cout << "Aeff\n";
+			Aeff.PrintInfo();
                         Aeff.OptimizeForGraph500(optbuf);               // Should be called before threading is activated
                 #ifdef THREADED
                         ostringstream tinfo;
@@ -191,6 +196,76 @@ int main(int argc, char* argv[])
                         SpParHelper::Print(tinfo.str());
                         Aeff.ActivateThreading(cblas_splits);
                 #endif
+		}
+		else if(string(argv[1]) == string("KaGen"))
+		{
+			if(argc < 3) {
+				if(myrank == 0) {
+					cout << "Usage for KaGen: ./run_cc KaGen <options>" << endl;
+					cout << "Example: ./run_cc KaGen 'rmat;N=12;M=15'" << endl;
+				}
+				MPI_Finalize();
+				return -1;
+			}
+
+			string options = string(argv[2]);
+			ostringstream outs;
+			outs << "Generating graph with KaGen using options: " << options << endl;
+			SpParHelper::Print(outs.str());
+			// Initialize KaGen
+			kagen::KaGen gen(MPI_COMM_WORLD);
+			gen.SetSeed(1); // Use deterministic seed for reproducibility
+			gen.EnableUndirectedGraphVerification();
+			gen.UseEdgeListRepresentation();
+
+			// Generate graph using option string
+			kagen::Graph graph = gen.GenerateFromOptionString(options);
+
+			// Convert KaGen graph to CombBLAS format
+
+			SpParHelper::Print("Generated graph with KaGen\n");
+
+			// Convert to sparse matrix format
+
+			auto globaln = graph.NumberOfGlobalVertices();
+			auto local_edges = graph.TakeEdges<int64_t>();
+			
+			DistEdgeList<int64_t> *DEL = new DistEdgeList<int64_t>(fullWorld->GetWorld(), globaln, local_edges);
+			auto del_edges = DEL->getEdges();
+			for (int i = 0; i < DEL->getNumLocalEdges(); i++) {
+				std::cout << "Edge " << i << ": " << del_edges[2 * i] << " " << del_edges[2 * i + 1] << std::endl;
+			}
+			A = PSpMat_Bool(*DEL, false);
+			delete DEL;
+			
+			PSpMat_Int64 * G = new PSpMat_Int64(A); 
+			G->Reduce(degrees, Row, plus<int64_t>(), static_cast<int64_t>(0));	// identity is 0 
+			delete G;
+
+			FullyDistVec<int64_t, int64_t> * ColSums = new FullyDistVec<int64_t, int64_t>(A.getcommgrid());
+			A.Reduce(*ColSums, Column, plus<int64_t>(), static_cast<int64_t>(0)); 	// plus<int64_t> matches the type of the output vector
+			nonisov = ColSums->FindInds(bind2nd(greater<int64_t>(), 0));
+
+			std::cout << "degrees in kagen\n";
+			degrees.DebugPrint();
+			ostringstream graphinfo;
+			graphinfo << "Converted to Boolean matrix" << endl;
+			SpParHelper::Print(graphinfo.str());
+			A.PrintInfo();
+
+			Aeff = PSpMat_s32p64(A);
+			A.FreeMemory();
+			std::cout << "Aeff\n";
+			Aeff.PrintInfo();
+			SpParHelper::Print("Symmetricized\n");
+
+			Aeff.OptimizeForGraph500(optbuf);		// Should be called before threading is activated
+#ifdef THREADED
+			ostringstream tinfo;
+			tinfo << "Threading activated with " << cblas_splits << " threads" << endl;
+			SpParHelper::Print(tinfo.str());
+			Aeff.ActivateThreading(cblas_splits);
+#endif
 		}
 		else if(string(argv[1]) == string("Binary"))
 		{
@@ -393,11 +468,7 @@ int main(int argc, char* argv[])
 		double t1 = MPI_Wtime();
 
 		// Now that every remaining vertex is non-isolated, randomly pick ITERS many of them as starting vertices
-		#ifndef NOPERMUTE
-		degrees = degrees(nonisov);	// fix the degrees array too
-		degrees.PrintInfo("Degrees array");
-		#endif
-		// degrees.DebugPrint();
+		degrees.DebugPrint();
 		FullyDistVec<int64_t, int64_t> Cands(ITERS, 0);
 		double nver = (double) degrees.TotalLength();
 
@@ -432,9 +503,18 @@ int main(int argc, char* argv[])
 		FullyDistVec<int64_t, int64_t> parents ( Aeff.getcommgrid(), Aeff.getncol(), (int64_t) -1);	// identity is -1
 		uint64_t num_components = 0;
 		double cc_start = MPI_Wtime();
+		std::cout << "nver: " << nver << "\n";
+		std::cout << "nonisov: ";
+		nonisov.DebugPrint();
         for(int vertex = 0; vertex < nver;) 
         {
+			cblas_allgathertime = 0;
+			cblas_alltoalltime = 0;
+			cblas_mergeconttime = 0;
+			cblas_transvectime  = 0;
+			cblas_localspmvtime = 0;
 			MPI_Barrier(MPI_COMM_WORLD);
+			double bfs_iteration_start = MPI_Wtime();
 			++num_components;
 
 			FullyDistSpVec<int64_t, int64_t> fringe(Aeff.getcommgrid(), Aeff.getncol());	// numerical values are stored 0-based
@@ -443,23 +523,43 @@ int main(int argc, char* argv[])
 			// fringe.DebugPrint(); 
 			while(fringe.getnnz() > 0)
 			{
+				std::cout << "fringe before running BFS\n";
+				fringe.DebugPrint();
 				fringe.setNumToInd();
 				fringe = SpMV(Aeff, fringe,optbuf);	// SpMV with sparse vector (with indexisvalue flag preset), optimization enabled
 				fringe = EWiseMult(fringe, parents, true, (int64_t) -1);	// clean-up vertices that already has parents 
-				// std::cout << "Frontier during BFS\n";
-				// fringe.DebugPrint();
+				std::cout << "fringe after running BFS\n";
+				fringe.DebugPrint();
+				std::cout << "parents before running BFS\n";
+				parents.DebugPrint();
 				parents.Set(fringe);
+				std::cout << "parents after running BFS\n";
+				parents.DebugPrint();
 			}
 			MPI_Barrier(MPI_COMM_WORLD);
+			double bfs_iteration_end = MPI_Wtime();
 			// std::cout << "Frontier after BFS\n";
 			// fringe.DebugPrint();
 			// FullyDistSpVec<int64_t, int64_t> parentsp = parents.Find(bind2nd(greater<int64_t>(), -1));
-			const auto [next_vertex, parent] = parents.MinElement();
-			// std::cout << "Next vertex and parent: " << next_vertex << " " << parent << "\n";
+			parents.DebugPrint();
+			auto [next_vertex, parent] = parents.MinElement();
+			while (next_vertex == vertex) {
+				parents.SetElement(vertex, vertex);
+				std::tie(next_vertex, parent) = parents.MinElement();
+				if (parent != -1) {
+					break;
+				}
+			}
 			if (parent != -1) {
 				break;
 			}
 			vertex = next_vertex;
+			std::cout << "next_vertex: " << next_vertex << "\n";
+
+			ostringstream outnew;
+			outnew << "BFS iteration time: " << bfs_iteration_end - bfs_iteration_start << " seconds" << endl;
+			outnew << "Communication per iteration: " << (cblas_allgathertime + cblas_alltoalltime) << endl;
+			SpParHelper::Print(outnew.str());
         }
 		double cc_end = MPI_Wtime();
         SpParHelper::Print("Finished\n");

@@ -2867,7 +2867,7 @@ void SpParMat<IT,NT,DER>::PrintInfo() const
 	if (commGrid->myrank == 0)	
 		std::cout << "As a whole: " << mm << " rows and "<< nn <<" columns and "<<  nznz << " nonzeros" << std::endl;
     
-#ifdef DEBUG
+// #ifdef DEBUG
 	IT allprocs = commGrid->grrows * commGrid->grcols;
 	for(IT i=0; i< allprocs; ++i)
 	{
@@ -2878,7 +2878,7 @@ void SpParMat<IT,NT,DER>::PrintInfo() const
 		}
 		MPI_Barrier(commGrid->GetWorld());
 	}
-#endif
+// #endif
 }
 
 template <class IT, class NT, class DER>
@@ -3156,6 +3156,8 @@ SpParMat< IT,NT,DER >::SpParMat (const DistEdgeList<DELIT> & DEL, bool removeloo
 
 	LIT m_perproc = DEL.getGlobalV() / gridrows;
 	LIT n_perproc = DEL.getGlobalV() / gridcols;
+	std::cout << "DEL.getGlobalV(): " << DEL.getGlobalV() << ", gridrows: " << gridrows << ", gridcols: " << gridcols << std::endl;
+	std::cout << "m_perproc: " << m_perproc << ", n_perproc: " << n_perproc << std::endl;
 
 	if(sizeof(LIT) < sizeof(DELIT))
 	{
@@ -3255,6 +3257,8 @@ SpParMat< IT,NT,DER >::SpParMat (const DistEdgeList<DELIT> & DEL, bool removeloo
 	else 	locrows = DEL.getGlobalV() - myprocrow * m_perproc;
 	if(myproccol != gridcols-1)	loccols = n_perproc;
 	else	loccols = DEL.getGlobalV() - myproccol * n_perproc;
+	
+	std::cout << "locrows: " << locrows << ", loccols: " << loccols << std::endl;
 
   	SpTuples<LIT,NT> A(totrecv/2, locrows, loccols, alledges, removeloops);  	// alledges is empty upon return
   	spSeq = new DER(A,false);        // Convert SpTuples to DER

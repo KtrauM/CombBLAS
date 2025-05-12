@@ -1,27 +1,26 @@
 cmake_minimum_required(VERSION 3.3)
 project(CombBLAS VERSION 2.0.1 LANGUAGES C CXX)
 
-# require c++14
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED YES)
-set(CMAKE_CXX_EXTENSIONS OFF)
-#set(CMAKE_BUILD_TYPE Debug)
-
+# require c++17
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_BUILD_TYPE Debug)
+add_compile_options(-w)
 # Main CombBLAS library
 add_library(CombBLAS src/CommGrid.cpp src/mmio.c src/MPIType.cpp src/MPIOp.cpp src/MemoryPool.cpp src/hash.cpp)
 
-# require c++14 in CombBLAS interface
-if("cxx_std_14" IN_LIST CMAKE_CXX_COMPILE_FEATURES) # Use language feature if available (CMake >= 3.8)
-  target_compile_features(CombBLAS PUBLIC cxx_std_14)
+# require c++17 in CombBLAS interface
+if("cxx_std_17" IN_LIST CMAKE_CXX_COMPILE_FEATURES) # Use language feature if available (CMake >= 3.8)
+  target_compile_features(CombBLAS PUBLIC cxx_std_17)
 else()
-  # Use C++14-specific features for CMake >= 3.3, which will force the appropriate language level flags.
-  target_compile_features(CombBLAS PUBLIC cxx_return_type_deduction)
+  # Use C++17-specific features for CMake >= 3.3, which will force the appropriate language level flags.
+  target_compile_features(CombBLAS PUBLIC cxx_static_assert)
 endif()
 
 # set include directories
 target_include_directories(CombBLAS PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 target_include_directories(CombBLAS PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/psort-1.0/include> $<INSTALL_INTERFACE:include>)
 target_include_directories(CombBLAS PRIVATE include/CombBLAS)
+target_include_directories(CombBLAS PUBLIC external/KaGen/kagen)
 
 # MPI and OpenMP dependencies
 find_package(MPI REQUIRED)
@@ -50,6 +49,9 @@ target_link_libraries(CombBLAS PUBLIC Usortlib)
 add_subdirectory(graph500-1.2/generator)
 target_link_libraries(CombBLAS PUBLIC GraphGenlib)
 
+add_subdirectory(external/KaGen)
+target_link_libraries(CombBLAS PRIVATE KaGen::KaGen)
+
 # Set up exported configuration
 # This allows CombBLAS to be installed in two ways:
 #   1. In /usr/local (or whatever prefix is specified)
@@ -65,14 +67,14 @@ generate_export_header(CombBLAS)
 set_target_properties(CombBLAS PROPERTIES VERSION ${CombBLAS_VERSION})
 
 # installation
-install(DIRECTORY include/ DESTINATION include)
-install(DIRECTORY psort-1.0/include/ DESTINATION include)
-install(TARGETS CombBLAS EXPORT CombBLASTargets
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib
-        RUNTIME DESTINATION bin
-        INCLUDES DESTINATION include
-        )
+# install(DIRECTORY include/ DESTINATION include)
+# install(DIRECTORY psort-1.0/include/ DESTINATION include)
+# install(TARGETS CombBLAS EXPORT CombBLASTargets
+#         LIBRARY DESTINATION lib
+#         ARCHIVE DESTINATION lib
+#         RUNTIME DESTINATION bin
+#         INCLUDES DESTINATION include
+#         )
 
 include(CMakePackageConfigHelpers)
 

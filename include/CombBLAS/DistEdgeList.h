@@ -85,6 +85,7 @@ public:
 	DistEdgeList ();
     DistEdgeList(MPI_Comm & myWorld);
 	DistEdgeList (const char * filename, IT globaln, IT globalm);	// read from binary in parallel
+    DistEdgeList(MPI_Comm & myWorld, IT globaln, std::vector<std::pair<IT, IT>> local_edgelist); // read from vector in parallel
 	~DistEdgeList ();
 
 	void Dump64bit(std::string filename);

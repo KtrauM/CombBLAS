@@ -58,6 +58,20 @@ DistEdgeList<IT>::DistEdgeList(MPI_Comm & myWorld): edges(NULL), pedges(NULL), n
 }
 
 template <typename IT>
+DistEdgeList<IT>::DistEdgeList(MPI_Comm & myWorld, IT globaln, std::vector<std::pair<IT, IT>> local_edgelist): edges(NULL), pedges(NULL), nedges(0), globalV(0)
+{
+    commGrid.reset(new CommGrid(myWorld, 0, 0));
+	nedges = local_edgelist.size();
+	globalV = globaln;
+	SetMemSize(nedges);
+	for (size_t i = 0; i < nedges; ++i) {
+		edges[2*i + 0] = local_edgelist[i].first;
+		edges[2*i + 1] = local_edgelist[i].second;
+	}
+
+}
+
+template <typename IT>
 DistEdgeList<IT>::DistEdgeList(const char * filename, IT globaln, IT globalm): edges(NULL), pedges(NULL), globalV(globaln)
 {
 	commGrid.reset(new CommGrid(MPI_COMM_WORLD, 0, 0));
